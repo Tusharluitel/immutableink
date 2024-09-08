@@ -3,12 +3,21 @@
 namespace App\Http\Controllers;
 
 use App\Models\File;
+use App\Services\BlockchainService;
+use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
 class FileController extends Controller
 {
+    protected $blockchain;
+
+    public function __construct(BlockchainService $blockchain)
+    {
+        $this->blockchain = $blockchain;
+    }
     public function index()
     {
         $user = Auth::user();
@@ -30,13 +39,21 @@ class FileController extends Controller
 
     if ($request->hasFile('file')) {
         $uploadedFile = $request->file('file');
-        $filePath = $uploadedFile->store('uploads', 'public');
+            $filePath = $uploadedFile->store('uploads', 'public');
+            $fileHash = hash_file('sha256', storage_path('app/public/' . $filePath));
 
-        $file = new File();
-        $file->user_id = Auth::id();
-        $file->file = $filePath;
-        $file->link = $request->link;
-        $file->save();
+            $file = new File();
+            $file->user_id = Auth::id();
+            $file->file = $filePath;
+            $file->link = $request->link;
+            $file->save();
+
+            try{
+                $this->blockchain->addFile($fileHash, $request->link);
+            }catch(Exception $e)
+            {
+                Log::error($e->getMessage());
+            }
 
         return redirect()->route('files.index')->with('success', 'File uploaded successfully.');
     }
